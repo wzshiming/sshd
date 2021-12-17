@@ -8,7 +8,7 @@ import (
 )
 
 func init() {
-	sshd.RegistryHandle("direct-tcpip", Handle)
+	sshd.RegistryHandleChannel("direct-tcpip", Handle)
 }
 
 func Handle(ctx context.Context, newChan ssh.NewChannel, serverConn *sshd.ServerConn) {

@@ -41,3 +41,21 @@ type ChannelOpenDirectMsg struct {
 	LAddr string
 	LPort uint32
 }
+
+//ForwardMsg copy from golang.org/x/crypto/ssh.channelForwardMsg
+type ForwardMsg struct {
+	LAddr string
+	LPort uint32
+}
+
+type ForwardResponseMsg struct {
+	Port uint32
+}
+
+//ForwardedTCPPayload copy from golang.org/x/crypto/ssh.forwardedTCPPayload
+type ForwardedTCPPayload struct {
+	Addr       string
+	Port       uint32
+	OriginAddr string
+	OriginPort uint32
+}

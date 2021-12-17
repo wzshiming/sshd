@@ -8,7 +8,7 @@ import (
 )
 
 func init() {
-	sshd.RegistryHandle("session", Handle)
+	sshd.RegistryHandleChannel("session", Handle)
 }
 
 func Handle(ctx context.Context, newChan ssh.NewChannel, serverConn *sshd.ServerConn) {

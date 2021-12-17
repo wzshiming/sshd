@@ -8,6 +8,7 @@ import (
 
 	_ "github.com/wzshiming/sshd/directtcp"
 	_ "github.com/wzshiming/sshd/session"
+	_ "github.com/wzshiming/sshd/tcpforward"
 
 	"github.com/wzshiming/sshd"
 	"golang.org/x/crypto/ssh"

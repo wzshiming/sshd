@@ -37,6 +37,9 @@ type ServerConn struct {
 	// ProxyDial specifies the optional proxyDial function for
 	// establishing the transport connection.
 	ProxyDial func(context.Context, string, string) (net.Conn, error)
+	// ProxyListen specifies the optional proxyListen function for
+	// establishing the transport connection.
+	ProxyListen func(context.Context, string, string) (net.Listener, error)
 	// Default environment
 	Environ []string
 	// Default workdir

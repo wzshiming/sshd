@@ -100,8 +100,7 @@ func (s *TCPForward) Forward(ctx context.Context, req *ssh.Request) {
 
 	k := fmt.Sprintf("%s:%d", m.LAddr, m.LPort)
 
-	var lc net.ListenConfig
-	listener, err := lc.Listen(ctx, "tcp", k)
+	listener, err := s.proxyListen(ctx, "tcp", k)
 	if err != nil {
 		if s.Logger != nil {
 			s.Logger.Println("Listen:", err)
@@ -130,6 +129,15 @@ func (s *TCPForward) Forward(ctx context.Context, req *ssh.Request) {
 		Port: port,
 	})
 	req.Reply(true, resp)
+}
+
+func (s *TCPForward) proxyListen(ctx context.Context, network, address string) (net.Listener, error) {
+	proxyListen := s.ProxyListen
+	if proxyListen == nil {
+		var listenConfig net.ListenConfig
+		proxyListen = listenConfig.Listen
+	}
+	return proxyListen(ctx, network, address)
 }
 
 type TCPForwardCancel struct {

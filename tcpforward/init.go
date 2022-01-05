@@ -28,8 +28,6 @@ func cancelPort(port uint32) {
 func Forward(ctx context.Context, req *ssh.Request, serverConn *sshd.ServerConn) {
 	d := &TCPForward{
 		ServerConn: serverConn,
-		BytesPool:  serverConn.BytesPool,
-		Logger:     serverConn.Logger,
 	}
 	mut.Lock()
 	defer mut.Unlock()
@@ -38,10 +36,8 @@ func Forward(ctx context.Context, req *ssh.Request, serverConn *sshd.ServerConn)
 }
 
 func Cancel(ctx context.Context, req *ssh.Request, serverConn *sshd.ServerConn) {
-	d := &TCPForward{
+	d := &TCPForwardCancel{
 		ServerConn: serverConn,
-		BytesPool:  serverConn.BytesPool,
-		Logger:     serverConn.Logger,
 	}
 	mut.Lock()
 	defer mut.Unlock()

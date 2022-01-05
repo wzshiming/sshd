@@ -13,11 +13,6 @@ import (
 // TCPForward Handling for a single incoming connection
 type TCPForward struct {
 	*sshd.ServerConn
-	//	Cancels map[string]context.CancelFunc
-	// BytesPool getting and returning temporary bytes for use by io.CopyBuffer
-	BytesPool sshd.BytesPool
-	// Logger error log
-	Logger sshd.Logger
 }
 
 func (s *TCPForward) forwardListener(ctx context.Context, listener net.Listener, cancel func()) {
@@ -137,7 +132,11 @@ func (s *TCPForward) Forward(ctx context.Context, req *ssh.Request) {
 	req.Reply(true, resp)
 }
 
-func (s *TCPForward) Cancel(ctx context.Context, req *ssh.Request) {
+type TCPForwardCancel struct {
+	*sshd.ServerConn
+}
+
+func (s *TCPForwardCancel) Cancel(ctx context.Context, req *ssh.Request) {
 	m := sshd.ForwardMsg{}
 	err := ssh.Unmarshal(req.Payload, &m)
 	if err != nil {

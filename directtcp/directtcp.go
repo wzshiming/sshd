@@ -12,13 +12,7 @@ import (
 // DirectTCP Handling for a single incoming connection
 type DirectTCP struct {
 	NewChan ssh.NewChannel
-	// BytesPool getting and returning temporary bytes for use by io.CopyBuffer
-	BytesPool sshd.BytesPool
-	// Logger error log
-	Logger sshd.Logger
-	// ProxyDial specifies the optional proxyDial function for
-	// establishing the transport connection.
-	ProxyDial func(context.Context, string, string) (net.Conn, error)
+	*sshd.ServerConn
 }
 
 func (s *DirectTCP) Handle(ctx context.Context) {

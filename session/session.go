@@ -14,12 +14,7 @@ import (
 // Session Handling for a single incoming connection
 type Session struct {
 	NewChan ssh.NewChannel
-	// Logger error log
-	Logger sshd.Logger
-	// Default environment
-	Environ []string
-	// Default workdir
-	Dir string
+	*sshd.ServerConn
 }
 
 func (s *Session) Handle(ctx context.Context) {

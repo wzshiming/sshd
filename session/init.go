@@ -13,10 +13,8 @@ func init() {
 
 func Handle(ctx context.Context, newChan ssh.NewChannel, serverConn *sshd.ServerConn) {
 	s := &Session{
-		NewChan: newChan,
-		Environ: serverConn.Environ,
-		Dir:     serverConn.Dir,
-		Logger:  serverConn.Logger,
+		NewChan:    newChan,
+		ServerConn: serverConn,
 	}
 	s.Handle(ctx)
 }

@@ -13,10 +13,8 @@ func init() {
 
 func Handle(ctx context.Context, newChan ssh.NewChannel, serverConn *sshd.ServerConn) {
 	d := &DirectTCP{
-		NewChan:   newChan,
-		ProxyDial: serverConn.ProxyDial,
-		BytesPool: serverConn.BytesPool,
-		Logger:    serverConn.Logger,
+		NewChan:    newChan,
+		ServerConn: serverConn,
 	}
 	d.Handle(ctx)
 }

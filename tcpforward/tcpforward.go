@@ -76,7 +76,7 @@ func (s *TCPForward) forwardListener(ctx context.Context, listener net.Listener,
 		go sshd.DiscardRequests(s.Logger, reqs)
 
 		err = sshd.Tunnel(ctx, conn, chans, buf1, buf2)
-		if err != nil {
+		if err != nil && !sshd.IsClosedConnError(err) {
 			if s.Logger != nil {
 				s.Logger.Println("Tunnel:", err)
 			}

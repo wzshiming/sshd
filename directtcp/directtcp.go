@@ -59,7 +59,7 @@ func (s *DirectTCP) Handle(ctx context.Context) {
 
 	go sshd.DiscardRequests(s.Logger, reqs)
 	err = sshd.Tunnel(ctx, ch, outbound, buf1, buf2)
-	if err != nil {
+	if err != nil && !sshd.IsClosedConnError(err) {
 		if s.Logger != nil {
 			s.Logger.Println("Tunnel:", err)
 		}

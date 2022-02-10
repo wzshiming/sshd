@@ -80,7 +80,6 @@ func (s *TCPForward) forwardListener(ctx context.Context, listener net.Listener,
 			if s.Logger != nil {
 				s.Logger.Println("Tunnel:", err)
 			}
-			return
 		}
 	}
 }

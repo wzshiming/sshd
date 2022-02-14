@@ -6,8 +6,10 @@ import (
 	"log"
 	"os"
 
+	_ "github.com/wzshiming/sshd/directstreamlocal"
 	_ "github.com/wzshiming/sshd/directtcp"
 	_ "github.com/wzshiming/sshd/session"
+	_ "github.com/wzshiming/sshd/streamlocalforward"
 	_ "github.com/wzshiming/sshd/tcpforward"
 
 	"github.com/wzshiming/sshd"

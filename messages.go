@@ -59,3 +59,21 @@ type ForwardedTCPPayload struct {
 	OriginAddr string
 	OriginPort uint32
 }
+
+// StreamLocalChannelForwardMsg copy from golang.org/x/crypto/ssh.streamLocalChannelForwardMsg
+type StreamLocalChannelForwardMsg struct {
+	SocketPath string
+}
+
+// ForwardedStreamLocalPayload copy from golang.org/x/crypto/ssh.forwardedStreamLocalPayload
+type ForwardedStreamLocalPayload struct {
+	SocketPath string
+	Reserved0  string
+}
+
+// StreamLocalChannelOpenDirectMsg copy from golang.org/x/crypto/ssh.streamLocalChannelOpenDirectMsg
+type StreamLocalChannelOpenDirectMsg struct {
+	SocketPath string
+	Reserved0  string
+	Reserved1  uint32
+}

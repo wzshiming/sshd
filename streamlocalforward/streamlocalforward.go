@@ -3,6 +3,7 @@ package streamlocalforward
 import (
 	"context"
 	"net"
+	"sync"
 
 	"github.com/wzshiming/sshd"
 	"golang.org/x/crypto/ssh"
@@ -10,19 +11,20 @@ import (
 
 // StreamLocalForward Handling for a single incoming connection
 type StreamLocalForward struct {
-	*sshd.ServerConn
+	cancelsMut sync.Mutex
+	cancels    map[string]context.CancelFunc
 }
 
-func (s *StreamLocalForward) forwardListener(ctx context.Context, listener net.Listener, cancel func()) {
+func (s *StreamLocalForward) forwardListener(ctx context.Context, serverConn *sshd.ServerConn, listener net.Listener, cancel func()) {
 	defer cancel()
 
 	var buf1, buf2 []byte
-	if s.BytesPool != nil {
-		buf1 = s.BytesPool.Get()
-		buf2 = s.BytesPool.Get()
+	if serverConn.BytesPool != nil {
+		buf1 = serverConn.BytesPool.Get()
+		buf2 = serverConn.BytesPool.Get()
 		defer func() {
-			s.BytesPool.Put(buf1)
-			s.BytesPool.Put(buf2)
+			serverConn.BytesPool.Put(buf1)
+			serverConn.BytesPool.Put(buf2)
 		}()
 	} else {
 		buf1 = make([]byte, 32*1024)
@@ -35,8 +37,8 @@ func (s *StreamLocalForward) forwardListener(ctx context.Context, listener net.L
 			if sshd.IsClosedConnError(err) {
 				return
 			}
-			if s.Logger != nil {
-				s.Logger.Println("listen Accept:", err)
+			if serverConn.Logger != nil {
+				serverConn.Logger.Println("listen Accept:", err)
 			}
 			return
 		}
@@ -46,59 +48,59 @@ func (s *StreamLocalForward) forwardListener(ctx context.Context, listener net.L
 		}
 
 		data := ssh.Marshal(resp)
-		chans, reqs, err := s.OpenChannel("forwarded-streamlocal@openssh.com", data)
+		chans, reqs, err := serverConn.OpenChannel("forwarded-streamlocal@openssh.com", data)
 		if err != nil {
-			if s.Logger != nil {
-				s.Logger.Println("OpenChannel:", err)
+			if serverConn.Logger != nil {
+				serverConn.Logger.Println("OpenChannel:", err)
 			}
 			return
 		}
 
-		go sshd.DiscardRequests(s.Logger, reqs)
+		go sshd.DiscardRequests(serverConn.Logger, reqs)
 
 		err = sshd.Tunnel(ctx, conn, chans, buf1, buf2)
 		if err != nil && !sshd.IsClosedConnError(err) {
-			if s.Logger != nil {
-				s.Logger.Println("Tunnel:", err)
+			if serverConn.Logger != nil {
+				serverConn.Logger.Println("Tunnel:", err)
 			}
 		}
 	}
 }
 
-func (s *StreamLocalForward) Forward(ctx context.Context, req *ssh.Request) {
+func (s *StreamLocalForward) Forward(ctx context.Context, req *ssh.Request, serverConn *sshd.ServerConn) {
 	m := sshd.StreamLocalChannelForwardMsg{}
 	err := ssh.Unmarshal(req.Payload, &m)
 	if err != nil {
-		if s.Logger != nil {
-			s.Logger.Println("Unmarshal:", err)
+		if serverConn.Logger != nil {
+			serverConn.Logger.Println("Unmarshal:", err)
 		}
 		req.Reply(false, nil)
 		return
 	}
 
-	cancelPath(m.SocketPath)
+	s.cancelPath(m.SocketPath)
 
-	listener, err := s.proxyListen(ctx, "unix", m.SocketPath)
+	listener, err := s.proxyListen(ctx, serverConn, "unix", m.SocketPath)
 	if err != nil {
-		if s.Logger != nil {
-			s.Logger.Println("Listen:", err)
+		if serverConn.Logger != nil {
+			serverConn.Logger.Println("Listen:", err)
 		}
 		req.Reply(false, nil)
 		return
 	}
 
-	cancels[m.SocketPath] = func() {
+	s.setCancelPath(m.SocketPath, func() {
 		listener.Close()
-	}
-	go s.forwardListener(ctx, listener, func() {
-		cancelPath(m.SocketPath)
+	})
+	go s.forwardListener(ctx, serverConn, listener, func() {
+		s.cancelPath(m.SocketPath)
 	})
 
 	req.Reply(true, nil)
 }
 
-func (s *StreamLocalForward) proxyListen(ctx context.Context, network, address string) (net.Listener, error) {
-	proxyListen := s.ProxyListen
+func (s *StreamLocalForward) proxyListen(ctx context.Context, serverConn *sshd.ServerConn, network, address string) (net.Listener, error) {
+	proxyListen := serverConn.ProxyListen
 	if proxyListen == nil {
 		var listenConfig net.ListenConfig
 		proxyListen = listenConfig.Listen
@@ -106,21 +108,38 @@ func (s *StreamLocalForward) proxyListen(ctx context.Context, network, address s
 	return proxyListen(ctx, network, address)
 }
 
-type StreamLocalForwardCancel struct {
-	*sshd.ServerConn
-}
-
-func (s *StreamLocalForwardCancel) Cancel(ctx context.Context, req *ssh.Request) {
+func (s *StreamLocalForward) Cancel(ctx context.Context, req *ssh.Request, serverConn *sshd.ServerConn) {
 	m := sshd.StreamLocalChannelForwardMsg{}
 	err := ssh.Unmarshal(req.Payload, &m)
 	if err != nil {
-		if s.Logger != nil {
-			s.Logger.Println("Unmarshal:", err)
+		if serverConn.Logger != nil {
+			serverConn.Logger.Println("Unmarshal:", err)
 		}
 		req.Reply(false, nil)
 		return
 	}
 
-	cancelPath(m.SocketPath)
+	s.cancelPath(m.SocketPath)
 	req.Reply(true, nil)
+}
+
+func (s *StreamLocalForward) cancelPath(path string) {
+	s.cancelsMut.Lock()
+	defer s.cancelsMut.Unlock()
+	if s.cancels == nil {
+		return
+	}
+	if cancel, ok := s.cancels[path]; ok {
+		cancel()
+		delete(s.cancels, path)
+	}
+}
+
+func (s *StreamLocalForward) setCancelPath(path string, cf context.CancelFunc) {
+	s.cancelsMut.Lock()
+	defer s.cancelsMut.Unlock()
+	if s.cancels == nil {
+		s.cancels = map[string]context.CancelFunc{}
+	}
+	s.cancels[path] = cf
 }

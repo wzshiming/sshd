@@ -10,65 +10,62 @@ import (
 )
 
 // DirectTCP Handling for a single incoming connection
-type DirectTCP struct {
-	NewChan ssh.NewChannel
-	*sshd.ServerConn
-}
+type DirectTCP struct{}
 
-func (s *DirectTCP) Handle(ctx context.Context) {
+func (s *DirectTCP) Handle(ctx context.Context, newChan ssh.NewChannel, serverConn *sshd.ServerConn) {
 	var msg sshd.ChannelOpenDirectMsg
-	if err := ssh.Unmarshal(s.NewChan.ExtraData(), &msg); err != nil {
-		if s.Logger != nil {
-			s.Logger.Println("unable to setup forwarding:", err)
+	if err := ssh.Unmarshal(newChan.ExtraData(), &msg); err != nil {
+		if serverConn.Logger != nil {
+			serverConn.Logger.Println("unable to setup forwarding:", err)
 		}
-		s.NewChan.Reject(ssh.ResourceShortage, "Error parsing message")
+		newChan.Reject(ssh.ResourceShortage, "Error parsing message")
 		return
 	}
 
-	outbound, err := s.proxyDial(ctx, "tcp", fmt.Sprintf("%s:%d", msg.RAddr, msg.RPort))
+	outbound, err := s.proxyDial(ctx, serverConn, "tcp", fmt.Sprintf("%s:%d", msg.RAddr, msg.RPort))
 	if err != nil {
-		if s.Logger != nil {
-			s.Logger.Println("unable to dial forward:", err)
+		if serverConn.Logger != nil {
+			serverConn.Logger.Println("unable to dial forward:", err)
 		}
-		s.NewChan.Reject(ssh.ConnectionFailed, err.Error())
+		newChan.Reject(ssh.ConnectionFailed, err.Error())
 		return
 	}
 	defer outbound.Close()
 
-	ch, reqs, err := s.NewChan.Accept()
+	ch, reqs, err := newChan.Accept()
 	if err != nil {
-		if s.Logger != nil {
-			s.Logger.Println("unable to accept chan:", err)
+		if serverConn.Logger != nil {
+			serverConn.Logger.Println("unable to accept chan:", err)
 		}
 		return
 	}
 	defer ch.Close()
 
 	var buf1, buf2 []byte
-	if s.BytesPool != nil {
-		buf1 = s.BytesPool.Get()
-		buf2 = s.BytesPool.Get()
+	if serverConn.BytesPool != nil {
+		buf1 = serverConn.BytesPool.Get()
+		buf2 = serverConn.BytesPool.Get()
 		defer func() {
-			s.BytesPool.Put(buf1)
-			s.BytesPool.Put(buf2)
+			serverConn.BytesPool.Put(buf1)
+			serverConn.BytesPool.Put(buf2)
 		}()
 	} else {
 		buf1 = make([]byte, 32*1024)
 		buf2 = make([]byte, 32*1024)
 	}
 
-	go sshd.DiscardRequests(s.Logger, reqs)
+	go sshd.DiscardRequests(serverConn.Logger, reqs)
 	err = sshd.Tunnel(ctx, ch, outbound, buf1, buf2)
 	if err != nil && !sshd.IsClosedConnError(err) {
-		if s.Logger != nil {
-			s.Logger.Println("Tunnel:", err)
+		if serverConn.Logger != nil {
+			serverConn.Logger.Println("Tunnel:", err)
 		}
 		return
 	}
 }
 
-func (s *DirectTCP) proxyDial(ctx context.Context, network, address string) (net.Conn, error) {
-	proxyDial := s.ProxyDial
+func (s *DirectTCP) proxyDial(ctx context.Context, serverConn *sshd.ServerConn, network, address string) (net.Conn, error) {
+	proxyDial := serverConn.ProxyDial
 	if proxyDial == nil {
 		var dialer net.Dialer
 		proxyDial = dialer.DialContext

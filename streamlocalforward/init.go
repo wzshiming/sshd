@@ -14,15 +14,25 @@ func init() {
 }
 
 var (
-	mut     sync.Mutex
-	cancels = map[string]context.CancelFunc{}
+	mut sync.Mutex
+
+	cancelsMut sync.Mutex
+	cancels    = map[string]context.CancelFunc{}
 )
 
 func cancelPath(path string) {
+	cancelsMut.Lock()
+	defer cancelsMut.Unlock()
 	if cancel, ok := cancels[path]; ok {
 		cancel()
 		delete(cancels, path)
 	}
+}
+
+func setCancelPath(path string, cf context.CancelFunc) {
+	cancelsMut.Lock()
+	defer cancelsMut.Unlock()
+	cancels[path] = cf
 }
 
 func Forward(ctx context.Context, req *ssh.Request, serverConn *sshd.ServerConn) {

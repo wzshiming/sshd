@@ -87,9 +87,9 @@ func (s *StreamLocalForward) Forward(ctx context.Context, req *ssh.Request) {
 		return
 	}
 
-	cancels[m.SocketPath] = func() {
+	setCancelPath(m.SocketPath, func() {
 		listener.Close()
-	}
+	})
 	go s.forwardListener(ctx, listener, func() {
 		cancelPath(m.SocketPath)
 	})

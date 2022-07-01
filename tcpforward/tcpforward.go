@@ -117,9 +117,9 @@ func (s *TCPForward) Forward(ctx context.Context, req *ssh.Request) {
 		return
 	}
 
-	cancels[port] = func() {
+	setCancelPort(port, func() {
 		listener.Close()
-	}
+	})
 	go s.forwardListener(ctx, listener, func() {
 		cancelPort(port)
 	})

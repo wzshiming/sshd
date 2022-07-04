@@ -2,6 +2,7 @@ package streamlocalforward
 
 import (
 	"context"
+	"io"
 	"net"
 	"sync"
 
@@ -12,11 +13,11 @@ import (
 // StreamLocalForward Handling for a single incoming connection
 type StreamLocalForward struct {
 	mut     sync.Mutex
-	cancels map[string]context.CancelFunc
+	cancels map[string]io.Closer
 }
 
-func (s *StreamLocalForward) forwardListener(ctx context.Context, serverConn *sshd.ServerConn, listener net.Listener, cancel func()) {
-	defer cancel()
+func (s *StreamLocalForward) forwardListener(ctx context.Context, serverConn *sshd.ServerConn, listener net.Listener) {
+	defer listener.Close()
 
 	var buf1, buf2 []byte
 	if serverConn.BytesPool != nil {
@@ -91,14 +92,8 @@ func (s *StreamLocalForward) Forward(ctx context.Context, req *ssh.Request, serv
 		return
 	}
 
-	s.setCancelPath(m.SocketPath, func() {
-		listener.Close()
-	})
-	go s.forwardListener(ctx, serverConn, listener, func() {
-		s.mut.Lock()
-		defer s.mut.Unlock()
-		s.cancelPath(m.SocketPath)
-	})
+	s.setCancelPath(m.SocketPath, listener)
+	go s.forwardListener(ctx, serverConn, listener)
 
 	req.Reply(true, nil)
 }
@@ -134,14 +129,17 @@ func (s *StreamLocalForward) cancelPath(path string) {
 		return
 	}
 	if cancel, ok := s.cancels[path]; ok {
-		cancel()
+		cancel.Close()
 		delete(s.cancels, path)
 	}
 }
 
-func (s *StreamLocalForward) setCancelPath(path string, cf context.CancelFunc) {
+func (s *StreamLocalForward) setCancelPath(path string, cf io.Closer) {
 	if s.cancels == nil {
-		s.cancels = map[string]context.CancelFunc{}
+		s.cancels = map[string]io.Closer{}
+	}
+	if cancel, ok := s.cancels[path]; ok {
+		cancel.Close()
 	}
 	s.cancels[path] = cf
 }

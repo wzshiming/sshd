@@ -3,6 +3,7 @@ package tcpforward
 import (
 	"context"
 	"fmt"
+	"io"
 	"net"
 	"strconv"
 	"sync"
@@ -14,11 +15,11 @@ import (
 // TCPForward Handling for a single incoming connection
 type TCPForward struct {
 	mut     sync.Mutex
-	cancels map[uint32]context.CancelFunc
+	cancels map[uint32]io.Closer
 }
 
-func (s *TCPForward) forwardListener(ctx context.Context, serverConn *sshd.ServerConn, listener net.Listener, cancel func()) {
-	defer cancel()
+func (s *TCPForward) forwardListener(ctx context.Context, serverConn *sshd.ServerConn, listener net.Listener) {
+	defer listener.Close()
 	_, port, err := ParseAddr(listener.Addr().String())
 	if err != nil {
 		if serverConn.Logger != nil {
@@ -121,14 +122,8 @@ func (s *TCPForward) Forward(ctx context.Context, req *ssh.Request, serverConn *
 		return
 	}
 
-	s.setCancelPort(port, func() {
-		listener.Close()
-	})
-	go s.forwardListener(ctx, serverConn, listener, func() {
-		s.mut.Lock()
-		defer s.mut.Unlock()
-		s.cancelPort(port)
-	})
+	s.setCancelPort(port, listener)
+	go s.forwardListener(ctx, serverConn, listener)
 
 	resp := ssh.Marshal(sshd.ForwardResponseMsg{
 		Port: port,
@@ -167,14 +162,17 @@ func (s *TCPForward) cancelPort(port uint32) {
 		return
 	}
 	if cancel, ok := s.cancels[port]; ok {
-		cancel()
+		cancel.Close()
 		delete(s.cancels, port)
 	}
 }
 
-func (s *TCPForward) setCancelPort(port uint32, cf context.CancelFunc) {
+func (s *TCPForward) setCancelPort(port uint32, cf io.Closer) {
 	if s.cancels == nil {
-		s.cancels = map[uint32]context.CancelFunc{}
+		s.cancels = map[uint32]io.Closer{}
+	}
+	if cancel, ok := s.cancels[port]; ok {
+		cancel.Close()
 	}
 	s.cancels[port] = cf
 }

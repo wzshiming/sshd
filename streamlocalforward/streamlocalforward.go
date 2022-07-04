@@ -11,8 +11,8 @@ import (
 
 // StreamLocalForward Handling for a single incoming connection
 type StreamLocalForward struct {
-	cancelsMut sync.Mutex
-	cancels    map[string]context.CancelFunc
+	mut     sync.Mutex
+	cancels map[string]context.CancelFunc
 }
 
 func (s *StreamLocalForward) forwardListener(ctx context.Context, serverConn *sshd.ServerConn, listener net.Listener, cancel func()) {
@@ -68,6 +68,8 @@ func (s *StreamLocalForward) forwardListener(ctx context.Context, serverConn *ss
 }
 
 func (s *StreamLocalForward) Forward(ctx context.Context, req *ssh.Request, serverConn *sshd.ServerConn) {
+	s.mut.Lock()
+	defer s.mut.Unlock()
 	m := sshd.StreamLocalChannelForwardMsg{}
 	err := ssh.Unmarshal(req.Payload, &m)
 	if err != nil {
@@ -93,6 +95,8 @@ func (s *StreamLocalForward) Forward(ctx context.Context, req *ssh.Request, serv
 		listener.Close()
 	})
 	go s.forwardListener(ctx, serverConn, listener, func() {
+		s.mut.Lock()
+		defer s.mut.Unlock()
 		s.cancelPath(m.SocketPath)
 	})
 
@@ -109,6 +113,8 @@ func (s *StreamLocalForward) proxyListen(ctx context.Context, serverConn *sshd.S
 }
 
 func (s *StreamLocalForward) Cancel(ctx context.Context, req *ssh.Request, serverConn *sshd.ServerConn) {
+	s.mut.Lock()
+	defer s.mut.Unlock()
 	m := sshd.StreamLocalChannelForwardMsg{}
 	err := ssh.Unmarshal(req.Payload, &m)
 	if err != nil {
@@ -124,8 +130,6 @@ func (s *StreamLocalForward) Cancel(ctx context.Context, req *ssh.Request, serve
 }
 
 func (s *StreamLocalForward) cancelPath(path string) {
-	s.cancelsMut.Lock()
-	defer s.cancelsMut.Unlock()
 	if s.cancels == nil {
 		return
 	}
@@ -136,8 +140,6 @@ func (s *StreamLocalForward) cancelPath(path string) {
 }
 
 func (s *StreamLocalForward) setCancelPath(path string, cf context.CancelFunc) {
-	s.cancelsMut.Lock()
-	defer s.cancelsMut.Unlock()
 	if s.cancels == nil {
 		s.cancels = map[string]context.CancelFunc{}
 	}

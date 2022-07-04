@@ -13,8 +13,8 @@ import (
 
 // TCPForward Handling for a single incoming connection
 type TCPForward struct {
-	cancelsMut sync.Mutex
-	cancels    map[uint32]context.CancelFunc
+	mut     sync.Mutex
+	cancels map[uint32]context.CancelFunc
 }
 
 func (s *TCPForward) forwardListener(ctx context.Context, serverConn *sshd.ServerConn, listener net.Listener, cancel func()) {
@@ -87,6 +87,8 @@ func (s *TCPForward) forwardListener(ctx context.Context, serverConn *sshd.Serve
 }
 
 func (s *TCPForward) Forward(ctx context.Context, req *ssh.Request, serverConn *sshd.ServerConn) {
+	s.mut.Lock()
+	defer s.mut.Unlock()
 	m := sshd.ForwardMsg{}
 	err := ssh.Unmarshal(req.Payload, &m)
 	if err != nil {
@@ -123,6 +125,8 @@ func (s *TCPForward) Forward(ctx context.Context, req *ssh.Request, serverConn *
 		listener.Close()
 	})
 	go s.forwardListener(ctx, serverConn, listener, func() {
+		s.mut.Lock()
+		defer s.mut.Unlock()
 		s.cancelPort(port)
 	})
 
@@ -142,6 +146,8 @@ func (s *TCPForward) proxyListen(ctx context.Context, serverConn *sshd.ServerCon
 }
 
 func (s *TCPForward) Cancel(ctx context.Context, req *ssh.Request, serverConn *sshd.ServerConn) {
+	s.mut.Lock()
+	defer s.mut.Unlock()
 	m := sshd.ForwardMsg{}
 	err := ssh.Unmarshal(req.Payload, &m)
 	if err != nil {
@@ -157,8 +163,6 @@ func (s *TCPForward) Cancel(ctx context.Context, req *ssh.Request, serverConn *s
 }
 
 func (s *TCPForward) cancelPort(port uint32) {
-	s.cancelsMut.Lock()
-	defer s.cancelsMut.Unlock()
 	if s.cancels == nil {
 		return
 	}
@@ -169,8 +173,6 @@ func (s *TCPForward) cancelPort(port uint32) {
 }
 
 func (s *TCPForward) setCancelPort(port uint32, cf context.CancelFunc) {
-	s.cancelsMut.Lock()
-	defer s.cancelsMut.Unlock()
 	if s.cancels == nil {
 		s.cancels = map[uint32]context.CancelFunc{}
 	}

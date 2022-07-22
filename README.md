@@ -16,8 +16,10 @@ This project is to add protocol support for the [sshproxy](https://github.com/wz
 
 [Example](https://github.com/wzshiming/sshd/blob/master/cmd/sshd/main.go)
 
-- [x] Support for the Direct TCP command
-- [x] Support for the TCP Forward command
+- [x] Support for the Direct TCP IP command
+- [x] Support for the TCP IP Forward command
+- [x] Support for the Direct Stream Local command
+- [x] Support for the Stream Local Forward command
 - [x] Support for the Session command
   - [x] env
   - [x] exec

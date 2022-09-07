@@ -5,6 +5,7 @@ import (
 	"context"
 	"crypto/rand"
 	"crypto/rsa"
+	"encoding/base64"
 	"io"
 	"net"
 	"os"
@@ -119,7 +120,20 @@ func RandomHostkey() (ssh.Signer, error) {
 	return ssh.NewSignerFromSigner(key)
 }
 
-func GetAuthorizedFile(authorized string) (map[string]string, error) {
+type Authorized struct {
+	Data map[string]map[string]string
+}
+
+func (a *Authorized) Allow(pk ssh.PublicKey) (bool, string) {
+	pks, ok := a.Data[pk.Type()]
+	if !ok {
+		return false, ""
+	}
+	comment, ok := pks[FormatPublicKey(pk)]
+	return ok, comment
+}
+
+func GetAuthorizedFile(authorized string) (*Authorized, error) {
 	f, err := os.Open(authorized)
 	if err != nil {
 		return nil, err
@@ -129,8 +143,8 @@ func GetAuthorizedFile(authorized string) (map[string]string, error) {
 	return ParseAuthorized(f)
 }
 
-func ParseAuthorized(r io.Reader) (map[string]string, error) {
-	keys := map[string]string{}
+func ParseAuthorized(r io.Reader) (*Authorized, error) {
+	keys := map[string]map[string]string{}
 	read := bufio.NewReader(r)
 	for {
 		line, _, err := read.ReadLine()
@@ -141,8 +155,16 @@ func ParseAuthorized(r io.Reader) (map[string]string, error) {
 			return nil, err
 		}
 		if key, cmt, _, _, err := ssh.ParseAuthorizedKey(line); err == nil {
-			keys[string(key.Marshal())] = cmt
+			keyType := key.Type()
+			if keys[keyType] == nil {
+				keys[keyType] = map[string]string{}
+			}
+			keys[keyType][FormatPublicKey(key)] = cmt
 		}
 	}
-	return keys, nil
+	return &Authorized{keys}, nil
+}
+
+func FormatPublicKey(pk ssh.PublicKey) string {
+	return base64.StdEncoding.EncodeToString(pk.Marshal())
 }

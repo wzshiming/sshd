@@ -65,8 +65,8 @@ func main() {
 			return
 		}
 		svc.ServerConfig.PublicKeyCallback = func(conn ssh.ConnMetadata, key ssh.PublicKey) (*ssh.Permissions, error) {
-			k := string(key.Marshal())
-			if _, ok := keys[k]; ok {
+			ok, _ := keys.Allow(key)
+			if ok {
 				return nil, nil
 			}
 			return nil, fmt.Errorf("denied")

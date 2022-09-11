@@ -21,6 +21,14 @@ func (s *DirectStreamLocal) Handle(ctx context.Context, newChan ssh.NewChannel, 
 		return
 	}
 
+	if serverConn.Permissions != nil && !serverConn.Permissions.Allow(name, msg.SocketPath) {
+		if serverConn.Logger != nil {
+			serverConn.Logger.Println("prohibited:", name, msg.SocketPath)
+		}
+		newChan.Reject(ssh.Prohibited, "Error administratively prohibited")
+		return
+	}
+
 	outbound, err := s.proxyDial(ctx, serverConn, "unix", msg.SocketPath)
 	if err != nil {
 		if serverConn.Logger != nil {

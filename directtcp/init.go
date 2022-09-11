@@ -4,7 +4,9 @@ import (
 	"github.com/wzshiming/sshd"
 )
 
+var name = "direct-tcpip"
+
 func init() {
 	directTcp := DirectTCP{}
-	sshd.RegistryHandleChannel("direct-tcpip", directTcp.Handle)
+	sshd.RegistryHandleChannel(name, directTcp.Handle)
 }

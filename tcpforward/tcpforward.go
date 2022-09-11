@@ -100,11 +100,15 @@ func (s *TCPForward) Forward(ctx context.Context, req *ssh.Request, serverConn *
 		return
 	}
 
+	local := fmt.Sprintf("%s:%d", formatLocalAddr(m.LAddr), m.LPort)
+	if serverConn.Permissions != nil && !serverConn.Permissions.Allow(name, local) {
+		req.Reply(false, nil)
+		return
+	}
+
 	s.cancelPort(m.LPort)
 
-	k := fmt.Sprintf("%s:%d", m.LAddr, m.LPort)
-
-	listener, err := s.proxyListen(ctx, serverConn, "tcp", k)
+	listener, err := s.proxyListen(ctx, serverConn, "tcp", local)
 	if err != nil {
 		if serverConn.Logger != nil {
 			serverConn.Logger.Println("Listen:", err)
@@ -153,6 +157,12 @@ func (s *TCPForward) Cancel(ctx context.Context, req *ssh.Request, serverConn *s
 		return
 	}
 
+	local := fmt.Sprintf("%s:%d", formatLocalAddr(m.LAddr), m.LPort)
+	if serverConn.Permissions != nil && !serverConn.Permissions.Allow(name, local) {
+		req.Reply(false, nil)
+		return
+	}
+
 	s.cancelPort(m.LPort)
 	req.Reply(true, nil)
 }
@@ -187,4 +197,18 @@ func ParseAddr(addr string) (string, uint32, error) {
 		return "", 0, err
 	}
 	return host, uint32(port), nil
+}
+
+func formatLocalAddr(addr string) string {
+	if addr == "" {
+		return ""
+	}
+	ip := net.ParseIP(addr)
+	if ip == nil {
+		return "127.0.0.1"
+	}
+	if ip.IsLoopback() {
+		return ip.String()
+	}
+	return ""
 }

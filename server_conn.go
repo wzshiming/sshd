@@ -44,6 +44,9 @@ type ServerConn struct {
 	Environ []string
 	// Default workdir
 	Dir string
+	// Permissions specify the permissions that the user has
+	// If nil, then allow all
+	Permissions Permissions
 }
 
 func NewServerConn(conn net.Conn, config *ssh.ServerConfig) (*ServerConn, error) {

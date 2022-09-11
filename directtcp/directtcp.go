@@ -22,7 +22,16 @@ func (s *DirectTCP) Handle(ctx context.Context, newChan ssh.NewChannel, serverCo
 		return
 	}
 
-	outbound, err := s.proxyDial(ctx, serverConn, "tcp", fmt.Sprintf("%s:%d", msg.RAddr, msg.RPort))
+	remote := fmt.Sprintf("%s:%d", msg.RAddr, msg.RPort)
+	if serverConn.Permissions != nil && !serverConn.Permissions.Allow(name, remote) {
+		if serverConn.Logger != nil {
+			serverConn.Logger.Println("prohibited:", name, remote)
+		}
+		newChan.Reject(ssh.Prohibited, "Error administratively prohibited")
+		return
+	}
+
+	outbound, err := s.proxyDial(ctx, serverConn, "tcp", remote)
 	if err != nil {
 		if serverConn.Logger != nil {
 			serverConn.Logger.Println("unable to dial forward:", err)

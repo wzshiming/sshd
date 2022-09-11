@@ -28,6 +28,14 @@ func (s *Session) Handle(ctx context.Context, newChan ssh.NewChannel, serverConn
 		ch.Close()
 	}()
 
+	if serverConn.Permissions != nil && !serverConn.Permissions.Allow(name, "") {
+		if serverConn.Logger != nil {
+			serverConn.Logger.Println("prohibited:", name)
+		}
+		newChan.Reject(ssh.Prohibited, "Error administratively prohibited")
+		return
+	}
+
 	var (
 		ptyReq        *sshd.PtyRequestMsg
 		winChangeChan chan *sshd.PtyWindowChangeMsg
@@ -42,6 +50,14 @@ func (s *Session) Handle(ctx context.Context, newChan ssh.NewChannel, serverConn
 				return
 			}
 			sess := true
+
+			if serverConn.Permissions != nil && !serverConn.Permissions.Allow(name, req.Type) {
+				if serverConn.Logger != nil {
+					serverConn.Logger.Println("error administratively req:", req.Type)
+				}
+				continue
+			}
+
 			switch req.Type {
 			case "pty-req":
 				ptyreq := &sshd.PtyRequestMsg{}

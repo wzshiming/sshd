@@ -28,6 +28,9 @@ type Server struct {
 	// ProxyListen specifies the optional proxyListen function for
 	// establishing the transport connection.
 	ProxyListen func(context.Context, string, string) (net.Listener, error)
+	// UserPermissions are based on the user getting all their permissions
+	// If nil, then allow all
+	UserPermissions func(user string) Permissions
 	// BytesPool getting and returning temporary bytes for use by io.CopyBuffer
 	BytesPool BytesPool
 	// Default environment
@@ -97,6 +100,9 @@ func (s *Server) ServeConn(conn net.Conn) {
 	c.BytesPool = s.BytesPool
 	c.Environ = s.Environ
 	c.Dir = s.Dir
+	if s.UserPermissions != nil {
+		c.Permissions = s.UserPermissions(c.ServerConn.User())
+	}
 	c.Handle(s.context())
 }
 

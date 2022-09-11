@@ -81,6 +81,11 @@ func (s *StreamLocalForward) Forward(ctx context.Context, req *ssh.Request, serv
 		return
 	}
 
+	if serverConn.Permissions != nil && !serverConn.Permissions.Allow(name, m.SocketPath) {
+		req.Reply(false, nil)
+		return
+	}
+
 	s.cancelPath(m.SocketPath)
 
 	listener, err := s.proxyListen(ctx, serverConn, "unix", m.SocketPath)
@@ -116,6 +121,11 @@ func (s *StreamLocalForward) Cancel(ctx context.Context, req *ssh.Request, serve
 		if serverConn.Logger != nil {
 			serverConn.Logger.Println("Unmarshal:", err)
 		}
+		req.Reply(false, nil)
+		return
+	}
+
+	if serverConn.Permissions != nil && !serverConn.Permissions.Allow(name, m.SocketPath) {
 		req.Reply(false, nil)
 		return
 	}

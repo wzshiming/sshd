@@ -4,7 +4,9 @@ import (
 	"github.com/wzshiming/sshd"
 )
 
+var name = "session"
+
 func init() {
 	session := &Session{}
-	sshd.RegistryHandleChannel("session", session.Handle)
+	sshd.RegistryHandleChannel(name, session.Handle)
 }

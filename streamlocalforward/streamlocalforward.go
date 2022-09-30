@@ -19,19 +19,6 @@ type StreamLocalForward struct {
 func (s *StreamLocalForward) forwardListener(ctx context.Context, serverConn *sshd.ServerConn, listener net.Listener) {
 	defer listener.Close()
 
-	var buf1, buf2 []byte
-	if serverConn.BytesPool != nil {
-		buf1 = serverConn.BytesPool.Get()
-		buf2 = serverConn.BytesPool.Get()
-		defer func() {
-			serverConn.BytesPool.Put(buf1)
-			serverConn.BytesPool.Put(buf2)
-		}()
-	} else {
-		buf1 = make([]byte, 32*1024)
-		buf2 = make([]byte, 32*1024)
-	}
-
 	for {
 		conn, err := listener.Accept()
 		if err != nil {
@@ -59,11 +46,27 @@ func (s *StreamLocalForward) forwardListener(ctx context.Context, serverConn *ss
 
 		go sshd.DiscardRequests(serverConn.Logger, reqs)
 
-		err = sshd.Tunnel(ctx, conn, chans, buf1, buf2)
-		if err != nil && !sshd.IsClosedConnError(err) {
-			if serverConn.Logger != nil {
-				serverConn.Logger.Println("Tunnel:", err)
-			}
+		go s.tunnel(ctx, serverConn, conn, chans)
+	}
+}
+
+func (s *StreamLocalForward) tunnel(ctx context.Context, serverConn *sshd.ServerConn, conn net.Conn, chans ssh.Channel) {
+	var buf1, buf2 []byte
+	if serverConn.BytesPool != nil {
+		buf1 = serverConn.BytesPool.Get()
+		buf2 = serverConn.BytesPool.Get()
+		defer func() {
+			serverConn.BytesPool.Put(buf1)
+			serverConn.BytesPool.Put(buf2)
+		}()
+	} else {
+		buf1 = make([]byte, 32*1024)
+		buf2 = make([]byte, 32*1024)
+	}
+	err := sshd.Tunnel(ctx, conn, chans, buf1, buf2)
+	if err != nil && !sshd.IsClosedConnError(err) {
+		if serverConn.Logger != nil {
+			serverConn.Logger.Println("Tunnel:", err)
 		}
 	}
 }

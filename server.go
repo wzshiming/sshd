@@ -88,6 +88,7 @@ func (s *Server) Serve(l net.Listener) error {
 func (s *Server) ServeConn(conn net.Conn) {
 	c, err := NewServerConn(conn, &s.ServerConfig)
 	if err != nil {
+		defer conn.Close()
 		if s.Logger != nil {
 			s.Logger.Println("unable to negotiate ssh:", err)
 		}

@@ -111,9 +111,22 @@ func (s *Session) Handle(ctx context.Context, newChan ssh.NewChannel, serverConn
 					}
 					sess = false
 				}
+			case "subsystem":
+				subsystemReq := &sshd.SubsystemRequestMsg{}
+				if err := ssh.Unmarshal(req.Payload, subsystemReq); err != nil {
+					if serverConn.Logger != nil {
+						serverConn.Logger.Println("error unmarshalling subsystem:", err)
+					}
+					return
+				}
+
+				if serverConn.Logger != nil {
+					serverConn.Logger.Println("unknown subsystem request:", subsystemReq.Subsystem)
+				}
+				sess = false
 			default:
 				if serverConn.Logger != nil {
-					serverConn.Logger.Println("unknown session request:", req.Type)
+					serverConn.Logger.Println("unknown session request:", req.Type, req.Payload)
 				}
 				sess = false
 			}

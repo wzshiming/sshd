@@ -15,7 +15,14 @@ import (
 // TCPForward Handling for a single incoming connection
 type TCPForward struct {
 	mut     sync.Mutex
-	cancels map[uint32]io.Closer
+	cancels map[cancelKey]io.Closer
+}
+
+// cancelKey scopes a forwarded port to its connection so one
+// connection cannot cancel another connection's forward.
+type cancelKey struct {
+	conn *sshd.ServerConn
+	port uint32
 }
 
 func (s *TCPForward) forwardListener(ctx context.Context, serverConn *sshd.ServerConn, listener net.Listener) {
@@ -91,8 +98,6 @@ func (s *TCPForward) tunnel(ctx context.Context, serverConn *sshd.ServerConn, co
 }
 
 func (s *TCPForward) Forward(ctx context.Context, req *ssh.Request, serverConn *sshd.ServerConn) {
-	s.mut.Lock()
-	defer s.mut.Unlock()
 	m := sshd.ForwardMsg{}
 	err := ssh.Unmarshal(req.Payload, &m)
 	if err != nil {
@@ -109,7 +114,7 @@ func (s *TCPForward) Forward(ctx context.Context, req *ssh.Request, serverConn *
 		return
 	}
 
-	s.cancelPort(m.LPort)
+	s.cancelPort(serverConn, m.LPort)
 
 	listener, err := s.proxyListen(ctx, serverConn, "tcp", local)
 	if err != nil {
@@ -129,7 +134,7 @@ func (s *TCPForward) Forward(ctx context.Context, req *ssh.Request, serverConn *
 		return
 	}
 
-	s.setCancelPort(port, listener)
+	s.setCancelPort(serverConn, port, listener)
 	go s.forwardListener(ctx, serverConn, listener)
 
 	resp := ssh.Marshal(sshd.ForwardResponseMsg{
@@ -148,8 +153,6 @@ func (s *TCPForward) proxyListen(ctx context.Context, serverConn *sshd.ServerCon
 }
 
 func (s *TCPForward) Cancel(ctx context.Context, req *ssh.Request, serverConn *sshd.ServerConn) {
-	s.mut.Lock()
-	defer s.mut.Unlock()
 	m := sshd.ForwardMsg{}
 	err := ssh.Unmarshal(req.Payload, &m)
 	if err != nil {
@@ -166,28 +169,31 @@ func (s *TCPForward) Cancel(ctx context.Context, req *ssh.Request, serverConn *s
 		return
 	}
 
-	s.cancelPort(m.LPort)
+	s.cancelPort(serverConn, m.LPort)
 	req.Reply(true, nil)
 }
 
-func (s *TCPForward) cancelPort(port uint32) {
-	if s.cancels == nil {
-		return
-	}
-	if cancel, ok := s.cancels[port]; ok {
+func (s *TCPForward) cancelPort(serverConn *sshd.ServerConn, port uint32) {
+	s.mut.Lock()
+	defer s.mut.Unlock()
+	key := cancelKey{serverConn, port}
+	if cancel, ok := s.cancels[key]; ok {
 		cancel.Close()
-		delete(s.cancels, port)
+		delete(s.cancels, key)
 	}
 }
 
-func (s *TCPForward) setCancelPort(port uint32, cf io.Closer) {
+func (s *TCPForward) setCancelPort(serverConn *sshd.ServerConn, port uint32, cf io.Closer) {
+	s.mut.Lock()
+	defer s.mut.Unlock()
 	if s.cancels == nil {
-		s.cancels = map[uint32]io.Closer{}
+		s.cancels = map[cancelKey]io.Closer{}
 	}
-	if cancel, ok := s.cancels[port]; ok {
+	key := cancelKey{serverConn, port}
+	if cancel, ok := s.cancels[key]; ok {
 		cancel.Close()
 	}
-	s.cancels[port] = cf
+	s.cancels[key] = cf
 }
 
 func ParseAddr(addr string) (string, uint32, error) {

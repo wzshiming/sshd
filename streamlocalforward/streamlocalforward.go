@@ -13,7 +13,14 @@ import (
 // StreamLocalForward Handling for a single incoming connection
 type StreamLocalForward struct {
 	mut     sync.Mutex
-	cancels map[string]io.Closer
+	cancels map[cancelKey]io.Closer
+}
+
+// cancelKey scopes a forwarded socket path to its connection so one
+// connection cannot cancel another connection's forward.
+type cancelKey struct {
+	conn *sshd.ServerConn
+	path string
 }
 
 func (s *StreamLocalForward) forwardListener(ctx context.Context, serverConn *sshd.ServerConn, listener net.Listener) {
@@ -72,8 +79,6 @@ func (s *StreamLocalForward) tunnel(ctx context.Context, serverConn *sshd.Server
 }
 
 func (s *StreamLocalForward) Forward(ctx context.Context, req *ssh.Request, serverConn *sshd.ServerConn) {
-	s.mut.Lock()
-	defer s.mut.Unlock()
 	m := sshd.StreamLocalChannelForwardMsg{}
 	err := ssh.Unmarshal(req.Payload, &m)
 	if err != nil {
@@ -89,7 +94,7 @@ func (s *StreamLocalForward) Forward(ctx context.Context, req *ssh.Request, serv
 		return
 	}
 
-	s.cancelPath(m.SocketPath)
+	s.cancelPath(serverConn, m.SocketPath)
 
 	listener, err := s.proxyListen(ctx, serverConn, "unix", m.SocketPath)
 	if err != nil {
@@ -100,7 +105,7 @@ func (s *StreamLocalForward) Forward(ctx context.Context, req *ssh.Request, serv
 		return
 	}
 
-	s.setCancelPath(m.SocketPath, listener)
+	s.setCancelPath(serverConn, m.SocketPath, listener)
 	go s.forwardListener(ctx, serverConn, listener)
 
 	req.Reply(true, nil)
@@ -116,8 +121,6 @@ func (s *StreamLocalForward) proxyListen(ctx context.Context, serverConn *sshd.S
 }
 
 func (s *StreamLocalForward) Cancel(ctx context.Context, req *ssh.Request, serverConn *sshd.ServerConn) {
-	s.mut.Lock()
-	defer s.mut.Unlock()
 	m := sshd.StreamLocalChannelForwardMsg{}
 	err := ssh.Unmarshal(req.Payload, &m)
 	if err != nil {
@@ -133,26 +136,29 @@ func (s *StreamLocalForward) Cancel(ctx context.Context, req *ssh.Request, serve
 		return
 	}
 
-	s.cancelPath(m.SocketPath)
+	s.cancelPath(serverConn, m.SocketPath)
 	req.Reply(true, nil)
 }
 
-func (s *StreamLocalForward) cancelPath(path string) {
-	if s.cancels == nil {
-		return
-	}
-	if cancel, ok := s.cancels[path]; ok {
+func (s *StreamLocalForward) cancelPath(serverConn *sshd.ServerConn, path string) {
+	s.mut.Lock()
+	defer s.mut.Unlock()
+	key := cancelKey{serverConn, path}
+	if cancel, ok := s.cancels[key]; ok {
 		cancel.Close()
-		delete(s.cancels, path)
+		delete(s.cancels, key)
 	}
 }
 
-func (s *StreamLocalForward) setCancelPath(path string, cf io.Closer) {
+func (s *StreamLocalForward) setCancelPath(serverConn *sshd.ServerConn, path string, cf io.Closer) {
+	s.mut.Lock()
+	defer s.mut.Unlock()
 	if s.cancels == nil {
-		s.cancels = map[string]io.Closer{}
+		s.cancels = map[cancelKey]io.Closer{}
 	}
-	if cancel, ok := s.cancels[path]; ok {
+	key := cancelKey{serverConn, path}
+	if cancel, ok := s.cancels[key]; ok {
 		cancel.Close()
 	}
-	s.cancels[path] = cf
+	s.cancels[key] = cf
 }

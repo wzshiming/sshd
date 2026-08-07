@@ -161,6 +161,9 @@ func (s *Session) Execute(ctx context.Context, serverConn *sshd.ServerConn, ch s
 	if err != nil {
 		return err
 	}
+	if len(c) == 0 {
+		return fmt.Errorf("empty command")
+	}
 	command := exec.CommandContext(ctx, c[0], c[1:]...)
 	command.Env = serverConn.Environ
 	command.Dir = serverConn.Dir

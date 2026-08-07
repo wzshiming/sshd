@@ -10,6 +10,7 @@ import (
 	"net"
 	"os"
 	"os/user"
+	"time"
 
 	"golang.org/x/crypto/ssh"
 )
@@ -37,10 +38,15 @@ type Server struct {
 	Environ []string
 	// Default workdir
 	Dir string
+	// HandshakeTimeout is the maximum amount of time allowed to
+	// complete the ssh handshake. Zero means no timeout.
+	HandshakeTimeout time.Duration
 }
 
 func NewServer() *Server {
-	s := &Server{}
+	s := &Server{
+		HandshakeTimeout: 10 * time.Second,
+	}
 	s.Environ = os.Environ()
 	if userInfo, err := user.Current(); err == nil {
 		s.Dir = userInfo.HomeDir
@@ -86,6 +92,11 @@ func (s *Server) Serve(l net.Listener) error {
 
 // ServeConn is used to serve a single connection.
 func (s *Server) ServeConn(conn net.Conn) {
+	// Bound the handshake so a stalled client cannot hold the
+	// goroutine and fd forever.
+	if t := s.HandshakeTimeout; t > 0 {
+		conn.SetDeadline(time.Now().Add(t))
+	}
 	c, err := NewServerConn(conn, &s.ServerConfig)
 	if err != nil {
 		defer conn.Close()
@@ -95,6 +106,10 @@ func (s *Server) ServeConn(conn net.Conn) {
 		return
 	}
 	defer c.Close()
+
+	if s.HandshakeTimeout > 0 {
+		conn.SetDeadline(time.Time{})
+	}
 	c.ProxyDial = s.ProxyDial
 	c.ProxyListen = s.ProxyListen
 	c.Logger = s.Logger

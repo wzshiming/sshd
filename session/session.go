@@ -15,6 +15,14 @@ import (
 type Session struct{}
 
 func (s *Session) Handle(ctx context.Context, newChan ssh.NewChannel, serverConn *sshd.ServerConn) {
+	if serverConn.Permissions != nil && !serverConn.Permissions.Allow(name, "") {
+		if serverConn.Logger != nil {
+			serverConn.Logger.Println("prohibited:", name)
+		}
+		newChan.Reject(ssh.Prohibited, "Error administratively prohibited")
+		return
+	}
+
 	ch, reqs, err := newChan.Accept()
 	if err != nil {
 		if serverConn.Logger != nil {
@@ -27,14 +35,6 @@ func (s *Session) Handle(ctx context.Context, newChan ssh.NewChannel, serverConn
 		ch.SendRequest("exit-status", false, b)
 		ch.Close()
 	}()
-
-	if serverConn.Permissions != nil && !serverConn.Permissions.Allow(name, "") {
-		if serverConn.Logger != nil {
-			serverConn.Logger.Println("prohibited:", name)
-		}
-		newChan.Reject(ssh.Prohibited, "Error administratively prohibited")
-		return
-	}
 
 	var (
 		ptyReq        *sshd.PtyRequestMsg

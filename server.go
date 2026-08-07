@@ -99,7 +99,8 @@ func (s *Server) ServeConn(conn net.Conn) {
 	c.ProxyListen = s.ProxyListen
 	c.Logger = s.Logger
 	c.BytesPool = s.BytesPool
-	c.Environ = s.Environ
+	// Copy so per-connection env changes don't leak to other connections.
+	c.Environ = append([]string(nil), s.Environ...)
 	c.Dir = s.Dir
 	if s.UserPermissions != nil {
 		c.Permissions = s.UserPermissions(c.ServerConn.User())

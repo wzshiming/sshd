@@ -41,6 +41,7 @@ func (s *Session) Handle(ctx context.Context, newChan ssh.NewChannel, serverConn
 		winChangeChan chan *sshd.PtyWindowChangeMsg
 	)
 	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
 	for {
 		select {
 		case <-ctx.Done():

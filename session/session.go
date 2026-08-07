@@ -78,6 +78,16 @@ func (s *Session) Handle(ctx context.Context, newChan ssh.NewChannel, serverConn
 					}
 					return
 				}
+				if winChangeChan == nil {
+					// window-change without a prior pty-req
+					sess = false
+					break
+				}
+				// Keep only the latest window size; never block the request loop.
+				select {
+				case <-winChangeChan:
+				default:
+				}
 				winChangeChan <- winchangereq
 			case "env":
 				envreq := &sshd.SetenvRequest{}

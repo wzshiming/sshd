@@ -103,7 +103,7 @@ func (s *ServerConn) handleChannels(ctx context.Context) {
 				if s.Logger != nil {
 					s.Logger.Println("unknown channel type:", chType)
 				}
-				newChan.Reject(ssh.Prohibited, "Prohibited")
+				newChan.Reject(ssh.UnknownChannelType, "unknown channel type")
 			}
 		}
 	}
